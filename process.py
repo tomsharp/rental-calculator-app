@@ -19,7 +19,7 @@ def split_df_into_report_tables(df: pd.DataFrame) -> list[pd.DataFrame]:
 
         df[[
             'upfront_repairs',
-            'down_payment',
+            'mortgage_principal',
             'total_upfront_costs',
         ]],
 
@@ -37,8 +37,8 @@ def split_df_into_report_tables(df: pd.DataFrame) -> list[pd.DataFrame]:
             'vacancy_rate_annual',
             'vacancy_cost_monthly',
             'monthly_maintenance_and_repairs',
-            'capex',
             'monthly_management_fees',
+            'capex',
             'variable_expenses',
         ]],
 
@@ -67,3 +67,22 @@ def process_report_table(table: pd.DataFrame) -> pd.DataFrame:
     )
     table["Value"] = table.apply(lambda x: _handle_row_format(x), axis=1)
     return table
+
+# def report_table_to_fig(table: pd.DataFrame) -> go.Figure:
+#   table = _process_report_table(table)
+#   return go.Figure(
+#       data=[
+#           go.Table(
+#               header=dict(
+#                   values=list(table.columns),
+#                   fill_color='lavender',
+#                   align='left'
+#               ),
+#               cells=dict(
+#                   values=[table.Metric, table.Value],
+#                   fill_color='lightgrey',
+#                   align='left'
+#               )
+#           )
+#       ]
+#   )

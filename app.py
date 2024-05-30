@@ -1,6 +1,8 @@
+import os
 import json
 from pathlib import Path
 
+import boto3
 from flask import Flask, render_template, request, redirect, url_for
 import pandas as pd
 import plotly.express as px
@@ -10,8 +12,12 @@ from model import Rental
 from process import split_df_into_report_tables, process_report_table
 
 
+BUCKET = os.environ["BUCKET"]
+METADATA_KEY = "data/metadata.json"
+
 app = Flask(__name__)
 
+# TODO - add function to seed backend (add data folder, metadata.json)
 
 def _map_types(x):
     return {
@@ -19,44 +25,52 @@ def _map_types(x):
         "integer": "number",
     }[x]
 
+def _get_s3_client():
+    session = boto3.Session()
+    return session.client("s3")
 
-def load_metadata():
-    with open("data/metadata.json", "r") as fp:
-        return json.load(fp)
+def _load_s3_file(key: str):
+    s3_client = _get_s3_client()
+    s3_object = s3_client.get_object(Bucket=BUCKET, Key=key)
+    body = s3_object['Body']
+    return body.read().decode('utf-8')
 
+def _save_s3_json(key: str, json_object):
+    s3_client = _get_s3_client()
+    s3_client.put_object(
+        Body=json.dumps(json_object),
+        Bucket=BUCKET,
+        Key=key
+    )
+    return key
 
 def load_report(metadata):
-    with open(metadata["location"], "r") as fp:
-        return json.load(fp)
-
+    file = _load_s3_file(metadata["location"])
+    return json.loads(file)
 
 def save_report(rental: Rental, name) -> str:
-    p = Path(f"data/{name}")
-    p.mkdir(parents=True, exist_ok=True)
-    path_to_file = p / "report.json"
-    with open(path_to_file, "w") as fp:
-        json.dump(rental.model_dump(), fp)
-    return str(path_to_file)
+    key = f"data/{name}/report.json"
+    model_json = rental.model_dump()
+    return _save_s3_json(key, model_json)
 
+def load_metadata():
+    file = _load_s3_file(METADATA_KEY)
+    return json.loads(file)
 
 def update_metadata(report_metadata):
     metadata = load_metadata()
     metadata.append(report_metadata)
-    with open("data/metadata.json", "w") as fp:
-        json.dump(metadata, fp)
-
+    return _save_s3_json(METADATA_KEY, metadata)
 
 @app.route("/")
 def landing_page():
     metadata = load_metadata()
     return render_template("landing.html", reports=metadata)
 
-
 @app.route("/report", methods=["POST"])
 def report():
     selected_report = request.form["report"]
     return redirect(url_for("show_report", report_name=selected_report))
-
 
 @app.route("/show_report/<report_name>")
 def show_report(report_name):
@@ -81,12 +95,7 @@ def show_report(report_name):
 
 def _report_builder_input_fields():
     metadata = [
-        {
-            "label": "Report Name:",
-            "id": "name",
-            "type": "text",
-            "required": True,
-        },
+        {"label": "Report Name:", "id": "name", "type": "text", "required": True},
         {
             "label": "Report Description:",
             "id": "description",
@@ -112,25 +121,22 @@ def report_builder():
 
     input_fields = _report_builder_input_fields()
 
+
     if request.method != "POST":
         return render_template("report_builder.html", input_fields=input_fields)
 
     # button push
     report_data = request.form
     rental = Rental(**report_data)
-
+    
     # Check if the report name already exists
     metadata = load_metadata()
+    print([item for item in metadata])
     existing_report_names = [item["name"] for item in metadata]
     if report_data["name"] in existing_report_names:
         # Render the report_builder.html template with an error message
         error_message = "Report name already exists. Please choose a different name."
-        return render_template(
-            "report_builder.html",
-            input_fields=input_fields,
-            error_message=error_message,
-            **report_data,
-        )
+        return render_template("report_builder.html", input_fields=input_fields, error_message=error_message, **report_data)
 
     try:
         rental = Rental(**report_data)
@@ -166,10 +172,10 @@ def edit_report(report_name):
         updated_report_data = request.form
         print(updated_report_data)
         rental = Rental(**updated_report_data)
-
+        
         # Update the report metadata
-        save_report(rental, selected_report_metadata["name"])
-
+        save_report(rental, selected_report_metadata['name'])
+        
         # Redirect to the updated report page
         return redirect(url_for("show_report", report_name=report_name))
 
@@ -177,18 +183,9 @@ def edit_report(report_name):
     input_fields = []
     report = load_report(selected_report_metadata)
     for k, v in Rental.schema()["properties"].items():
-        input_fields.append(
-            {
-                "label": v["title"],
-                "id": k,
-                "type": _map_types(v["type"]),
-                "value": report[k],
-            }
-        )
+        input_fields.append({"label": v["title"], "id": k, "type": _map_types(v["type"]), "value": report[k]})
 
-    return render_template(
-        "edit_report.html", report_name=report_name, input_fields=input_fields
-    )
+    return render_template("edit_report.html", report_name=report_name, input_fields=input_fields)
 
 
 if __name__ == "__main__":
