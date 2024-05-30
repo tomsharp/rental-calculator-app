@@ -16,8 +16,8 @@ class Rental(BaseModel):
   projected_monthly_rent: int
   vacancy_rate_annual: float
   monthly_maintenance_and_repairs: int
-  monthly_management_fees: int
   capex: int
+  monthly_management_fees: int
   horizon: int
   annualized_appreciation: float
 

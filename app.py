@@ -21,10 +21,6 @@ def _map_types(x):
 
 
 def load_metadata():
-    return
-
-
-def load_metadata():
     with open("data/metadata.json", "r") as fp:
         return json.load(fp)
 
@@ -85,7 +81,12 @@ def show_report(report_name):
 
 def _report_builder_input_fields():
     metadata = [
-        {"label": "Report Name:", "id": "name", "type": "text", "required": True},
+        {
+            "label": "Report Name:",
+            "id": "name",
+            "type": "text",
+            "required": True,
+        },
         {
             "label": "Report Description:",
             "id": "description",
@@ -111,21 +112,25 @@ def report_builder():
 
     input_fields = _report_builder_input_fields()
 
-
     if request.method != "POST":
         return render_template("report_builder.html", input_fields=input_fields)
 
     # button push
     report_data = request.form
     rental = Rental(**report_data)
-    
+
     # Check if the report name already exists
     metadata = load_metadata()
     existing_report_names = [item["name"] for item in metadata]
     if report_data["name"] in existing_report_names:
         # Render the report_builder.html template with an error message
         error_message = "Report name already exists. Please choose a different name."
-        return render_template("report_builder.html", input_fields=input_fields, error_message=error_message, **report_data)
+        return render_template(
+            "report_builder.html",
+            input_fields=input_fields,
+            error_message=error_message,
+            **report_data,
+        )
 
     try:
         rental = Rental(**report_data)
@@ -161,10 +166,10 @@ def edit_report(report_name):
         updated_report_data = request.form
         print(updated_report_data)
         rental = Rental(**updated_report_data)
-        
+
         # Update the report metadata
-        save_report(rental, selected_report_metadata['name'])
-        
+        save_report(rental, selected_report_metadata["name"])
+
         # Redirect to the updated report page
         return redirect(url_for("show_report", report_name=report_name))
 
@@ -172,9 +177,18 @@ def edit_report(report_name):
     input_fields = []
     report = load_report(selected_report_metadata)
     for k, v in Rental.schema()["properties"].items():
-        input_fields.append({"label": v["title"], "id": k, "type": _map_types(v["type"]), "value": report[k]})
+        input_fields.append(
+            {
+                "label": v["title"],
+                "id": k,
+                "type": _map_types(v["type"]),
+                "value": report[k],
+            }
+        )
 
-    return render_template("edit_report.html", report_name=report_name, input_fields=input_fields)
+    return render_template(
+        "edit_report.html", report_name=report_name, input_fields=input_fields
+    )
 
 
 if __name__ == "__main__":
